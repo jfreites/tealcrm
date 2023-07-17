@@ -8,7 +8,8 @@ from django.views import View
 from django.views.generic import ListView, DetailView, DeleteView, UpdateView, CreateView
 from django.urls import reverse_lazy
 
-from .models import Lead
+from .forms import AddCommentForm
+from .models import Lead, Comment
 
 from client.models import Client
 from team.models import Team
@@ -32,6 +33,13 @@ class LeadDetailView(DetailView):
     @method_decorator(login_required)
     def dispatch(self, *args, **kwargs):
         return super().dispatch(*args, **kwargs)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form'] = AddCommentForm()
+        context['comments'] = Comment.objects.filter(lead_id=self.kwargs.get('pk'))
+
+        return context
 
 
 class LeadDeleteView(DeleteView):
@@ -125,3 +133,22 @@ class ConvertToClientView(View):
         messages.success(request, 'The lead was converted to a client')
 
         return redirect('lead:list')
+    
+
+class AddCommentView(View):
+    def post(self, request, *args, **kwargs):
+        pk = kwargs.get('pk')
+        team = Team.objects.filter(created_by=request.user)[0]
+        
+        form = AddCommentForm(request.POST)
+
+        if form.is_valid():
+            comment = form.save(commit=False)
+            comment.team = team
+            comment.created_by = request.user
+            comment.lead_id = pk
+            comment.save()
+
+            messages.success(request, 'Your comment was saved.')
+
+        return redirect('lead:detail', pk=pk)
