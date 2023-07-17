@@ -1,103 +1,127 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, redirect, get_object_or_404
+from django.forms.models import BaseModelForm
+from django.http import HttpResponse
+from django.shortcuts import redirect, get_object_or_404
+from django.utils.decorators import method_decorator
+from django.views import View
+from django.views.generic import ListView, DetailView, DeleteView, UpdateView, CreateView
+from django.urls import reverse_lazy
 
-from .forms import AddLeadForm
 from .models import Lead
 
 from client.models import Client
 from team.models import Team
 
 
-@login_required
-def leads_listing(request):
-    leads = Lead.objects.filter(created_by=request.user, converted_to_client=False)
+class LeadListView(ListView):
+    model = Lead
 
-    return render(request, 'lead/leads_listing.html', {
-        'leads': leads
-    })
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
 
-
-@login_required
-def lead_detail(request,pk):
-    lead = get_object_or_404(Lead, created_by=request.user, pk=pk)
-
-    return render(request, 'lead/lead_detail.html', {
-        'lead': lead
-    })
+    def get_queryset(self):
+        queryset = super(LeadListView, self).get_queryset()
+        return queryset.filter(created_by=self.request.user, converted_to_client=False)
 
 
-@login_required
-def delete_lead(request, pk):
-    lead = get_object_or_404(Lead, pk=pk)
-    lead.delete()
+class LeadDetailView(DetailView):
+    model = Lead
 
-    messages.success(request, 'The lead was deleted')
-
-    return redirect('lead:list')
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
 
 
-@login_required
-def add_lead(request):
-    form = AddLeadForm()
-    team = Team.objects.filter(created_by=request.user)[0]
+class LeadDeleteView(DeleteView):
+    model = Lead
+    success_url = reverse_lazy('lead:list')
+    
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
 
-    if request.method == 'POST':
-        form = AddLeadForm(request.POST)
-
-        if form.is_valid():
-            lead = form.save(commit=False)
-            lead.created_by = request.user
-            lead.team = team
-            lead.save()
-
-            messages.success(request, 'The lead was created')
-
-            return redirect('leads_listing')
-
-    return render(request, 'lead/add_lead.html', {'form': form, 'team': team})
+    def form_valid(self, form):
+        messages.success(self.request, 'The lead was deleted')
+        return super(LeadDeleteView, self).form_valid(form)
 
 
-@login_required
-def edit_lead(request, pk):
-    lead = get_object_or_404(Lead, created_by=request.user, pk=pk)
-    form = AddLeadForm(instance=lead)
 
-    if request.method == 'POST':
-        form = AddLeadForm(request.POST, instance=lead)
+class LeadUpdateView(UpdateView):
+    model = Lead
+    fields = ('name', 'email', 'description', 'priority', 'status',)
+    success_url = reverse_lazy('lead:list')
 
-        if form.is_valid():
-            form.save()
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+    
+    def get_queryset(self):
+        queryset = super(LeadUpdateView, self).get_queryset()
+        return queryset.filter(created_by=self.request.user, pk=self.kwargs.get('pk'))
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form_title'] = 'Edit Lead'
 
-            messages.success(request, 'The lead was updated')
+        return context
 
+
+class LeadCreateView(CreateView):
+    model = Lead
+    fields = ('name', 'email', 'description', 'priority', 'status',)
+    success_url = reverse_lazy('lead:list')
+
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        team = Team.objects.filter(created_by=self.request.user)[0]
+        context['team'] = team
+        context['form_title'] = 'Add Lead'
+        context['total_leads'] = Lead.objects.filter(created_by=self.request.user, converted_to_client=False).count()
+
+        return context
+
+    
+    def form_valid(self, form: BaseModelForm) -> HttpResponse:
+        team = Team.objects.filter(created_by=self.request.user)[0]
+
+        form.instance.team = team
+        form.instance.created_by = self.request.user
+
+        return super().form_valid(form)
+
+
+class ConvertToClientView(View):
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        print(args, kwargs, self.args, self.kwargs)
+        lead = get_object_or_404(Lead, created_by=request.user, pk=self.kwargs.get('pk'))
+        team = Team.objects.filter(created_by=request.user)[0]
+        clients_total = Client.objects.filter(team=team).count()
+
+        if clients_total > team.plan.max_clients:
+            messages.success(request, 'You have reached the limit of clients.')
             return redirect('lead:list')
 
-    return render(request, 'lead/edit_lead.html', {'form': form})
+        Client.objects.create(
+            name=lead.name,
+            email=lead.email,
+            description=lead.description,
+            created_by=request.user,
+            team=lead.team,
+        )
 
+        lead.converted_to_client = True
+        lead.save()
 
-@login_required
-def convert_to_client(request, pk):
-    lead = get_object_or_404(Lead, created_by=request.user, pk=pk)
-    team = Team.objects.filter(created_by=request.user)[0]
-
-    if team.plan.max_clients <= Client.objects.count():
-        messages.success(request, 'You have reached the limit of clients.')
+        messages.success(request, 'The lead was converted to a client')
 
         return redirect('lead:list')
-
-
-    Client.objects.create(
-        name=lead.name,
-        email=lead.email,
-        description=lead.description,
-        created_by=request.user,
-        team=lead.team,
-    )
-
-    lead.converted_to_client = True
-    lead.save()
-
-    messages.success(request, 'The lead was converted to a client')
-
-    return redirect('leads_listing')

@@ -1,0 +1,13 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+    <div class="py-6 px-6">
+        <form action="." method="post">
+            {% csrf_token %}
+            <h2>Delete this lead</h2>
+            <p>Are your sure?</p>
+
+            <button class="py-4 px-6 bg-teal-500 text-white">Delete</button>
+        </form>
+    </div>  
+{% endblock %}
