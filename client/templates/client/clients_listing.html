@@ -8,6 +8,8 @@
 
         <a href="#" class="inline-block py-4 px-6 bg-teal-700 text-white">New client</a>
 
+        <a href="{% url 'clients_export' %}" class="inline-block py-4 px-6 bg-teal-700 text-white">Export clients</a>
+
         {% if clients %}
         <div class="mt-6 flex justify-between">
             <p class="py-4 px-2 font-semibold bg-gray-200 w-full">Name</p>

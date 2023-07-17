@@ -5,7 +5,7 @@ from django.contrib.auth.views import LoginView, LogoutView
 from django.urls import path, include
 
 from core.views import index, about
-from team.views import edit_team
+from team.views import edit_team, team_detail
 from userprofile.views import signup, myaccount
 
 urlpatterns = [
@@ -13,6 +13,7 @@ urlpatterns = [
     path('dashboard/leads/', include('lead.urls')),
     path('dashboard/clients/', include('client.urls')),
     path('dashboard/my-account/', myaccount, name='myaccount'),
+    path('dashboard/teams/<int:pk>/', team_detail, name='team_detail'),
     path('dashboard/teams/<int:pk>/edit/', edit_team, name='edit_team'),
     path('dashboard/', include('dashboard.urls')),
     path('about/', about, name='about'),
