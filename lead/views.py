@@ -8,8 +8,8 @@ from django.views import View
 from django.views.generic import ListView, DetailView, DeleteView, UpdateView, CreateView
 from django.urls import reverse_lazy
 
-from .forms import AddCommentForm
-from .models import Lead, Comment
+from .forms import AddCommentForm, AddLeadFileForm
+from .models import Lead, Comment, LeadFile
 
 from client.models import Client
 from team.models import Team
@@ -37,7 +37,7 @@ class LeadDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['form'] = AddCommentForm()
-        context['comments'] = Comment.objects.filter(lead_id=self.kwargs.get('pk'))
+        context['fileform'] = AddLeadFileForm()
 
         return context
 
@@ -135,14 +135,34 @@ class ConvertToClientView(View):
         return redirect('lead:list')
     
 
-class AddCommentView(View):
+class AddFileView(View):
     def post(self, request, *args, **kwargs):
         pk = kwargs.get('pk')
         team = Team.objects.filter(created_by=request.user)[0]
         
+        form = AddLeadFileForm(request.POST, request.FILES)
+
+        if form.is_valid():
+            team = Team.objects.filter(created_by=request.user)[0]
+            leadfile = form.save(commit=False)
+            leadfile.team = team
+            leadfile.created_by = request.user
+            leadfile.lead_id = pk
+            leadfile.save()
+
+            messages.success(request, 'Your file was uploaded.')
+
+        return redirect('lead:detail', pk=pk)
+
+
+class AddCommentView(View):
+    def post(self, request, *args, **kwargs):
+        pk = kwargs.get('pk')
+
         form = AddCommentForm(request.POST)
 
         if form.is_valid():
+            team = Team.objects.filter(created_by=request.user)[0]
             comment = form.save(commit=False)
             comment.team = team
             comment.created_by = request.user

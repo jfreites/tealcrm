@@ -54,6 +54,27 @@
 
         <hr class="my-4">
 
+        <h2 class="mb-6 text-xl">Files</h2>
+
+        <div class="space-y-4">
+            {% for leadfile in lead.files.all %}
+            <div class="bg-gray-100 mb-2 py-6 px-6 rounded-xl">
+                <p class="mb-2">{{ leadfile.file.name|upper }} created by <strong>{{ leadfile.created_by }}</strong> @ {{ leadfile.created_at }}</p>
+
+                <a href="{{ leadfile.file.url }}" class="text-teal-500 font-semibold" target="_blank">Download</a>
+            </div>
+            {% endfor %}
+        </div>
+
+        <form action="{% url 'lead:add_file' lead.id %}" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            {{ fileform.as_p }}
+
+            <button class="py-2 px-4 bg-teal-500 text-white">Upload</button>
+        </form>
+
+        <hr class="my-4">
+
         <a href="{% url 'lead:list' %}" class="text-teal-700">Back to leads</a>
     </div>  
 {% endblock %}
